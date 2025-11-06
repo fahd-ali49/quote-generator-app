@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إصدار عروض الأسعار</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    
+    <div id="login-view" class="container" style="display: none;">
+        <div class="card">
+            <h1>تسجيل الدخول للموظفين</h1>
+            <form id="login-form">
+                <label for="login-email">البريد الإلكتروني:</label>
+                <input type="email" id="login-email" name="email" required placeholder="example@company.com">
+
+                <label for="login-password">كلمة المرور:</label>
+                <input type="password" id="login-password" name="password" required placeholder="*******">
+
+                <button type="submit" class="submit-btn">تسجيل الدخول</button>
+                <p id="login-message" class="error-message" style="color: red;"></p>
+            </form>
+        </div>
+    </div>
+
+    <div id="app-view" class="container" style="display: none;">
+        <header>
+            <h1>إصدار عرض سعر جديد</h1>
+            <button id="logout-btn" class="logout-btn">تسجيل خروج</button>
+        </header>
+
+        <form id="quote-form">
+            
+            <div class="card">
+                <h2>بيانات العميل والسلعة</h2>
+                <label for="entity">اسم العميل/الجهة (`{{entity}}`):</label>
+                <input type="text" id="entity" name="entity" required>
+
+                <label for="specs">المواصفات (`{{specs}}`):</label>
+                <textarea id="specs" name="specs" rows="4" required></textarea>
+
+                <label for="color">اللون (`{{color}}`):</label>
+                <input type="text" id="color" name="color">
+
+                <label for="boards">اللوحات (`{{boards}}`):</label>
+                <input type="text" id="boards" name="boards">
+            </div>
+
+            <div class="card">
+                <h2>التسعير والحسابات</h2>
+                <label for="unitPrice">السعر الإفرادي (قبل الضريبة) (`{{unitPrice}}`):</label>
+                <input type="number" id="unitPrice" name="unitPrice" step="0.01" required>
+
+                <label for="vat">قيمة الضريبة المضافة (15%) (`{{vat}}`):</label>
+                <input type="text" id="vat" name="vat" value="0.00" readonly>
+                
+                <label for="totalPrice">الإجمالي الكلي (شامل الضريبة) (`{{totalPrice}}`):</label>
+                <input type="text" id="totalPrice" name="totalPrice" value="0.00" readonly>
+
+                <label for="totalText">الإجمالي كتابة (`{{totalText}}`):</label>
+                <input type="text" id="totalText" name="totalText" readonly>
+            </div>
+            
+            <div class="card">
+                <h2>بيانات الموظف والضمان</h2>
+                
+                <label for="seller">استشاري المبيعات (`{{seller}}`):</label>
+                <input type="text" id="seller" name="seller" required>
+
+                <label for="phone">رقم الجوال (`{{phone}}`):</label>
+                <input type="text" id="phone" name="phone" required>
+                
+                <label for="warranty">ضمان الوكيل (`{{warranty}}`):</label>
+                <textarea id="warranty" name="warranty" rows="3"></textarea>
+
+                <label for="campaign">الحملة (`{{campaign}}`):</label>
+                <input type="text" id="campaign" name="campaign">
+            </div>
+
+            <button type="submit" class="submit-btn">توليد عرض السعر (PDF)</button>
+        </form>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
