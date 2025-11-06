@@ -1,67 +1,121 @@
-// server.js - إضافة متطلبات JWT
-// ... (تأكد من وجود bcrypt و jsonwebtoken في البداية)
-const jwt = require('jsonwebtoken');
+// server.js
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
+const bodyParser = require('body-parser');
 
-// مفتاح سري لتوقيع رموز JWT - يجب أن يكون قوياً ويُخزن في متغير بيئة
-const JWT_SECRET = 'YOUR_SUPER_SECURE_SECRET_KEY'; 
+// 1. مكتبات تعبئة القالب والتحويل
+const Docxtemplater = require('docxtemplater');
+const libre = require('libreoffice-convert');
+// يجب تعيين مسار LibreOffice هنا للتحويل إلى PDF
+libre.convert.office = libre.convert.path; 
 
-// ----------------------------------------------------------------
-// 1. الدالة الوسيطة للأمان (JWT Authentication Middleware)
-// ----------------------------------------------------------------
-const authenticateToken = (req, res, next) => {
-    // قراءة الرمز من الترويسة (Header) Authorization: Bearer TOKEN
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; 
+const app = express();
+const port = 3000;
 
-    if (token == null) {
-        // الرمز غير موجود
-        return res.status(401).json({ success: false, message: 'مطلوب تسجيل الدخول (رمز مصادقة مفقود).' });
+// هذا يسمح لـ Express بقراءة البيانات المرسلة بصيغة JSON
+app.use(bodyParser.json());
+
+// مسار ملف القالب
+const templatePath = path.resolve(__dirname, 'عرض سعر فهد .docx');
+// مسار مجلد الإخراج
+const outputFolder = path.resolve(__dirname, 'output');
+
+// التأكد من وجود مجلد الإخراج
+if (!fs.existsSync(outputFolder)) {
+    fs.mkdirSync(outputFolder);
+}
+
+app.post('/generate-quote', async (req, res) => {
+    
+    // 2. **** التعديل: تنظيف واستخلاص البيانات المطلوبة فقط ****
+    // هذا يحل مشكلة "Unexpected properties: type" عن طريق تجاهل أي خصائص إضافية
+    const cleanData = {
+        entity: req.body.entity || 'اسم العميل الافتراضي',
+        totalPrice: req.body.totalPrice || '0.00',
+        vat: req.body.vat || '0.00',
+        unitPrice: req.body.unitPrice || '0.00',
+        boards: req.body.boards || 'غير متوفر',
+        color: req.body.color || 'أبيض',
+        specs: req.body.specs || 'غير محددة',
+        totalText: req.body.totalText || 'صفر ريال سعودي',
+        campaign: req.body.campaign || 'بدون حملة',
+        warranty: req.body.warranty || 'ضمان سنتين',
+        seller: req.body.seller || 'فهد',
+        phone: req.body.phone || '05xxxxxxxx'
+    };
+
+    let docxContent;
+    try {
+        // 3. قراءة محتوى القالب
+        docxContent = fs.readFileSync(templatePath, 'binary');
+    } catch (readError) {
+        console.error("Error reading template file:", readError);
+        return res.status(500).send({ message: "فشل قراءة ملف القالب. تأكد من وجوده في المسار الصحيح.", error: readError.message });
     }
 
-    jwt.verify(token, JWT_SECRET, (err, user) => {
-        if (err) {
-            // الرمز غير صالح أو انتهت صلاحيته
-            return res.status(403).json({ success: false, message: 'رمز المصادقة غير صالح. يرجى تسجيل الدخول مجدداً.' });
-        }
-        // الرمز صالح، إضافة بيانات المستخدم إلى الطلب
-        req.user = user; 
-        next(); // الانتقال إلى الدالة التالية (مثل generate-quote)
-    });
-};
+    const doc = new Docxtemplater(docxContent, { type: 'binary' });
 
-// ...
+    try {
+        // 4. تعبئة القالب بالبيانات النظيفة
+        doc.setData(cleanData); // نستخدم cleanData التي قمنا بتنظيفها
+        doc.render();
 
-// ----------------------------------------------------------------
-// 2. تحديث مسار تسجيل الدخول (/api/login)
-// ----------------------------------------------------------------
-app.post('/api/login', async (req, res) => {
-    // ... منطق مقارنة كلمة المرور (bcrypt.compare) ...
+        // 5. حفظ الملف بصيغة DOCX في Buffer
+        const buffer = doc.getZip().generate({
+            type: 'nodebuffer',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            compression: 'DEFLATE',
+        });
 
-    // في حالة النجاح:
-    // ... إنشاء رمز JWT ...
-    
-    // إرسال الرمز وبيانات الموظف للواجهة الأمامية
-    res.json({ 
-        success: true, 
-        message: 'تم تسجيل الدخول بنجاح!', 
-        token: token,
-        // هذه البيانات ستستخدم لملء حقول البائع تلقائياً
-        user: { fullName: mockUser.full_name, phone: mockUser.phone_number } 
-    });
+        const docxFileName = `عرض_سعر_${cleanData.entity}_${Date.now()}.docx`;
+        const docxFilePath = path.join(outputFolder, docxFileName);
+        
+        // 6. التحويل إلى PDF
+        const pdfFileName = docxFileName.replace('.docx', '.pdf');
+        const pdfFilePath = path.join(outputFolder, pdfFileName);
+
+        libre.convert(buffer, '.pdf', undefined, (err, done) => {
+            if (err) {
+                console.error(`Conversion error for ${docxFileName}:`, err);
+                // رسالة خطأ واضحة في حال فشل التحويل بسبب LibreOffice
+                return res.status(500).send({ 
+                    message: "فشل في تحويل الملف إلى PDF. تأكد من تثبيت LibreOffice على نظامك.", 
+                    error: err.message 
+                });
+            }
+
+            // 7. إرسال الملف الناتج كاستجابة
+            fs.writeFileSync(pdfFilePath, done);
+            
+            res.download(pdfFilePath, pdfFileName, (downloadErr) => {
+                if (downloadErr) {
+                    console.error("Error sending PDF file to user:", downloadErr);
+                    return res.status(200).send({ 
+                        message: `تم إنشاء الملف بنجاح ولكن فشل الإرسال، يمكنك العثور عليه في مجلد output باسم: ${pdfFileName}`
+                    });
+                }
+            });
+        });
+
+
+    } catch (templateError) {
+        // 8. التعامل مع أخطاء القالب
+        const error = {
+            message: templateError.message,
+            stack: templateError.stack,
+            properties: templateError.properties,
+            name: templateError.name
+        };
+        console.error("Template Error Details:", JSON.stringify(error, null, 2));
+        return res.status(500).send({
+            message: "فشل التوليد: هناك خطأ في تنسيق الأوسمة (Tags) داخل ملف الـ Word. يرجى التأكد من كتابتها جميعاً بالشكل الصحيح {{tag}}.",
+            error: error
+        });
+    }
 });
 
-// ----------------------------------------------------------------
-// 3. حماية مسار توليد العرض (/api/generate-quote)
-// ----------------------------------------------------------------
-// تطبيق الدالة الوسيطة authenticateToken قبل دالة توليد العرض
-app.post('/api/generate-quote', authenticateToken, async (req, res) => {
-    // الآن، يمكنك الوصول لبيانات الموظف المُسجل دخوله عبر req.user
-    
-    // إذا كنت تريد استخدام بيانات الموظف المُسجل دخوله تلقائياً:
-    // quoteData.seller = req.user.full_name;
-    // quoteData.phone = req.user.phone_number;
-    
-    // ... بقية منطق توليد PDF الذي جهزناه سابقاً ...
+app.listen(port, () => {
+    console.log(`Server is running on http://localhost:${port}`);
+    console.log(`Endpoint: http://localhost:${port}/generate-quote`);
 });
-
-// ... (بقية الملف)
